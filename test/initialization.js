@@ -3,6 +3,7 @@ var restify = require('restify');
 var { Client } = require('pg');
 var bunyan = require('bunyan');
 var helper = require('./helper');
+var async = require('async');
 var request = helper.request;
 
 describe('initialize method', function() {
@@ -106,6 +107,51 @@ describe('initialize method', function() {
   });
 
 
+  it('should ignore a table if in ignoredTableNames', function(done) {
+
+    var client = new Client(helper.pgConfig);
+    client.connect();
+
+    // drop the id column from the test table
+
+    async.series([
+      function (next) {
+        client.query('alter table user_alert_messages_bad_id drop column if exists id;', [], next);
+      },
+      function (next) {
+        client.query('alter table user_alert_messages drop column if exists id;', [], next);
+      }
+    ], function(err) {
+
+      client.end();
+
+      if (err) throw err;
+
+      var server = restify.createServer({
+        log: bunyan.createLogger({
+          name: 'restify-test-logger',
+          level: 'error'
+        })
+      });
+
+      pgRestify.initialize({
+          server:server,
+          pgConfig:helper.pgConfig,
+          ignoredTableNames: ['user_alert_messages', 'user_alert_messages_bad_id']
+        },
+        postInit);
+
+      function postInit(err, conf) {
+
+        should(err).be.undefined();
+
+        done();
+
+      }
+
+    });
+
+  });
 
 
 
